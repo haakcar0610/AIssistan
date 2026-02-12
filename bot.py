@@ -35,8 +35,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # YENİ: text_generation API - Aya-Expanse-8b için çalışan format
         response = client.text_generation(
-            model="CohereForAI/aya-expanse-8b",
-            prompt=f"Sadece Türkçe cevap ver. Soru: {user_message}",
+            model="mistralai/Mistral-7B-Instruct-v0.3",
+            prompt=f"[INST] Sadece Türkçe cevap ver. Soru: {user_message} [/INST]",
             max_new_tokens=500,
             temperature=0.7,
             top_p=0.95,
