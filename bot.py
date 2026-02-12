@@ -19,12 +19,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     
-    # "." mesajını sil
+    # "." mesajını sil - GÜÇLENDİRİLMİŞ VERSİYON
     if user_message == ".":
         try:
             await update.message.delete()
-        except:
-            pass
+            print(f"✅ '.' mesajı silindi - ID: {update.message.message_id}")
+        except Exception as e:
+            print(f"❌ '.' mesajı silinemedi - Hata: {e}")
+            # Alternatif silme yöntemi
+            try:
+                await context.bot.delete_message(
+                    chat_id=update.message.chat_id,
+                    message_id=update.message.message_id
+                )
+                print(f"✅ Alternatif silme başarılı - ID: {update.message.message_id}")
+            except Exception as e2:
+                print(f"❌ Alternatif silme de başarısız: {e2}")
         return
     
     await update.message.chat.send_action(action="typing")
