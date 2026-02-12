@@ -1,20 +1,17 @@
 import os
 import asyncio
-from huggingface_hub import InferenceClient
+from groq import Groq
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Tokenlar
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-HUGGINGFACE_TOKEN = os.environ.get("HUGGINGFACE_TOKEN")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 PORT = int(os.environ.get("PORT", 8080))
 HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "aissistan.onrender.com")
 
-# Inference Client
-client = InferenceClient(
-    provider="hf-inference",
-    token=HUGGINGFACE_TOKEN
-)
+# Groq client
+client = Groq(api_key=GROQ_API_KEY)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Merhaba! Ben AI asistanınız. Size Türkçe yardımcı olabilirim.")
@@ -22,7 +19,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     
-    # "." mesajını sil
     if user_message == ".":
         try:
             await update.message.delete()
@@ -33,17 +29,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action(action="typing")
     
     try:
-        # YENİ: text_generation API - Aya-Expanse-8b için çalışan format
-        response = client.text_generation(
-            model="mistralai/Mistral-7B-Instruct-v0.3",
-            prompt=f"[INST] Sadece Türkçe cevap ver. Soru: {user_message} [/INST]",
-            max_new_tokens=500,
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "Sen Türkçe konuşan bir AI asistanısın. Sadece Türkçe cevap ver, asla İngilizce kelime kullanma."},
+                {"role": "user", "content": user_message}
+            ],
             temperature=0.7,
-            top_p=0.95,
-            do_sample=True
+            max_tokens=500
         )
         
-        ai_reply = response
+        ai_reply = completion.choices[0].message.content
         
     except Exception as e:
         ai_reply = f"Hata: {str(e)}"
@@ -56,16 +52,12 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Webhook kurulumu
     webhook_url = f"https://{HOST}/{TELEGRAM_TOKEN}"
     
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(app.bot.set_webhook(url=webhook_url))
-    print(f"✅ Webhook set to {webhook_url}")
     
-    # Webhook'u başlat
-    print(f"🚀 Starting webhook on port {PORT}...")
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
