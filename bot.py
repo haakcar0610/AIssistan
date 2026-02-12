@@ -1,6 +1,6 @@
 import os
 import asyncio
-import requests
+from huggingface_hub import InferenceClient
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -9,6 +9,12 @@ TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 HUGGINGFACE_TOKEN = os.environ.get("HUGGINGFACE_TOKEN")
 PORT = int(os.environ.get("PORT", 8080))
 HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "aissistan.onrender.com")
+
+# Inference Client - YENİ MİMARİ
+client = InferenceClient(
+    provider="hf-inference",
+    token=HUGGINGFACE_TOKEN
+)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Merhaba! Ben AI asistanınız.")
@@ -27,28 +33,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action(action="typing")
     
     try:
-        # Mistral 7B - ücretsiz ve çalışıyor
-        response = requests.post(
-            "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
-            headers={"Authorization": f"Bearer {HUGGINGFACE_TOKEN}"},
-            json={
-                "inputs": f"[INST] {user_message} [/INST]",
-                "parameters": {
-                    "max_new_tokens": 500,
-                    "temperature": 0.7,
-                }
-            },
-            timeout=30
+        # YENİ: Hugging Face'in yeni InferenceClient'ı ile
+        messages = [
+            {
+                "role": "user",
+                "content": f"Sadece Türkçe cevap ver. Soru: {user_message}"
+            }
+        ]
+        
+        response = client.chat.completions.create(
+            model="CohereForAI/aya-expanse-8b",
+            messages=messages,
+            max_tokens=500,
+            temperature=0.7
         )
         
-        if response.status_code == 200:
-            result = response.json()
-            ai_reply = result[0]["generated_text"].split("[/INST]")[-1].strip()
-        else:
-            ai_reply = "Üzgünüm, şu anda cevap veremiyorum."
-            
-    except:
-        ai_reply = "Bir hata oluştu."
+        ai_reply = response.choices[0].message.content
+        
+    except Exception as e:
+        ai_reply = f"Hata oluştu: {str(e)}"
+        # Hata log'da görünsün diye print ekle
+        print(f"HATA: {e}")
     
     await update.message.reply_text(ai_reply)
 
