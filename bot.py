@@ -1,7 +1,6 @@
 import os
 import asyncio
 import requests
-import json
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -12,12 +11,12 @@ PORT = int(os.environ.get("PORT", 8080))
 HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "aissistan.onrender.com")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Merhaba! Ben AI asistanınız. Bana istediğiniz soruyu sorabilirsiniz.")
+    await update.message.reply_text("Merhaba! Ben AI asistanınız.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     
-    # "." mesajını görmezden gel ve sil
+    # "." mesajını sil
     if user_message == ".":
         try:
             await update.message.delete()
@@ -25,11 +24,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
     
-    # Kullanıcıya "yazıyor..." göster
     await update.message.chat.send_action(action="typing")
     
-    # AI'a sor - YENİ MODEL (Mistral 7B)
     try:
+        # Mistral 7B - ücretsiz ve çalışıyor
         response = requests.post(
             "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
             headers={"Authorization": f"Bearer {HUGGINGFACE_TOKEN}"},
@@ -38,8 +36,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "parameters": {
                     "max_new_tokens": 500,
                     "temperature": 0.7,
-                    "top_p": 0.95,
-                    "do_sample": True
                 }
             },
             timeout=30
@@ -47,17 +43,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if response.status_code == 200:
             result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                ai_reply = result[0].get("generated_text", "Üzgünüm, cevap üretemedim.")
-                # Cevabı temizle
-                ai_reply = ai_reply.split("[/INST]")[-1].strip()
-            else:
-                ai_reply = result.get("generated_text", "Üzgünüm, cevap üretemedim.")
+            ai_reply = result[0]["generated_text"].split("[/INST]")[-1].strip()
         else:
-            ai_reply = f"AI servisi şu an yanıt vermiyor. (Hata: {response.status_code})"
+            ai_reply = "Üzgünüm, şu anda cevap veremiyorum."
             
-    except Exception as e:
-        ai_reply = f"Bir hata oluştu: {str(e)}"
+    except:
+        ai_reply = "Bir hata oluştu."
     
     await update.message.reply_text(ai_reply)
 
@@ -66,16 +57,12 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Webhook kurulumu
     webhook_url = f"https://{HOST}/{TELEGRAM_TOKEN}"
     
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(app.bot.set_webhook(url=webhook_url))
-    print(f"✅ Webhook set to {webhook_url}")
     
-    # Webhook'u başlat
-    print(f"🚀 Starting webhook on port {PORT}...")
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
