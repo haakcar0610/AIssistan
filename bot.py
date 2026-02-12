@@ -9,7 +9,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 HUGGINGFACE_TOKEN = os.environ.get("HUGGINGFACE_TOKEN")
 PORT = int(os.environ.get("PORT", 8080))
-HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "aissistan.onrender.com")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Merhaba! Ben AI asistanınız.")
