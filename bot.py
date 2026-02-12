@@ -60,10 +60,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": "Sen Türkçe konuşan bir AI asistanısın. Sadece Türkçe cevap ver."},
+                {
+                    "role": "system", 
+                    "content": (
+                        "Sen sadece Türkçe konuşan bir AI asistanısın. "
+                        "Kesinlikle İngilizce veya yabancı kelime kullanma. "
+                        "Kullanıcının sorusunun ana amacını anla, ona odaklan. "
+                        "Gereksiz giriş cümleleri kurma, doğrudan ve net cevap ver."
+                    )
+                },
                 {"role": "user", "content": user_message}
             ],
-            temperature=0.7,
+            temperature=0.3,
             max_tokens=500
         )
         
