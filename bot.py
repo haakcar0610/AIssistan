@@ -28,13 +28,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Kullanıcıya "yazıyor..." göster
     await update.message.chat.send_action(action="typing")
     
-    # AI'a sor
+    # AI'a sor - YENİ MODEL (Mistral 7B)
     try:
         response = requests.post(
-            "https://api-inference.huggingface.co/models/Qwen/Qwen2.5-Coder-32B-Instruct",
+            "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3",
             headers={"Authorization": f"Bearer {HUGGINGFACE_TOKEN}"},
             json={
-                "inputs": user_message,
+                "inputs": f"[INST] {user_message} [/INST]",
                 "parameters": {
                     "max_new_tokens": 500,
                     "temperature": 0.7,
@@ -49,6 +49,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             result = response.json()
             if isinstance(result, list) and len(result) > 0:
                 ai_reply = result[0].get("generated_text", "Üzgünüm, cevap üretemedim.")
+                # Cevabı temizle
+                ai_reply = ai_reply.split("[/INST]")[-1].strip()
             else:
                 ai_reply = result.get("generated_text", "Üzgünüm, cevap üretemedim.")
         else:
