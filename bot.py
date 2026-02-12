@@ -19,6 +19,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     
+    # "." mesajını sil
     if user_message == ".":
         try:
             await update.message.delete()
@@ -29,21 +30,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.chat.send_action(action="typing")
     
     try:
+        # Groq ile Llama 3.3 70B
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": "Sen Türkçe konuşan bir AI asistanısın. Sadece Türkçe cevap ver, asla İngilizce kelime kullanma."},
+                {"role": "system", "content": "Sen Türkçe konuşan bir AI asistanısın. Sadece Türkçe cevap ver, asla İngilizce kelime kullanma. Kullanıcıya anlayacağı dilden, net ve doğal cevaplar ver."},
                 {"role": "user", "content": user_message}
             ],
             temperature=0.7,
-            max_tokens=500
+            max_tokens=500,
+            top_p=0.95
         )
         
         ai_reply = completion.choices[0].message.content
         
     except Exception as e:
-        ai_reply = f"Hata: {str(e)}"
-        print(f"HATA: {e}")
+        ai_reply = f"Hata oluştu: {str(e)}"
+        print(f"GROQ HATASI: {e}")
     
     await update.message.reply_text(ai_reply)
 
@@ -52,12 +55,16 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
+    # Webhook kurulumu
     webhook_url = f"https://{HOST}/{TELEGRAM_TOKEN}"
     
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(app.bot.set_webhook(url=webhook_url))
+    print(f"✅ Webhook set to {webhook_url}")
     
+    # Webhook'u başlat
+    print(f"🚀 Starting webhook on port {PORT}...")
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
