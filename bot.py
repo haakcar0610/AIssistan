@@ -1,6 +1,6 @@
-import sys
 import os
 import asyncio
+import sys
 from groq import Groq
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -25,10 +25,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             # 1. YÖNTEM: Direkt sil
             await update.message.delete()
-            print(f"✅ Silindi (1.yöntem): {update.message.message_id}")
+            print(f"✅ Silindi (1.yöntem): {update.message.message_id}", flush=True)
             return
         except Exception as e:
-            print(f"❌ 1.yöntem hatası: {e}")
+            print(f"❌ 1.yöntem hatası: {e}", flush=True)
             
         try:
             # 2. YÖNTEM: Bot üzerinden sil
@@ -36,10 +36,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=update.effective_chat.id,
                 message_id=update.message.message_id
             )
-            print(f"✅ Silindi (2.yöntem): {update.message.message_id}")
+            print(f"✅ Silindi (2.yöntem): {update.message.message_id}", flush=True)
             return
         except Exception as e:
-            print(f"❌ 2.yöntem hatası: {e}")
+            print(f"❌ 2.yöntem hatası: {e}", flush=True)
             
         try:
             # 3. YÖNTEM: Botun kendi mesajını da sil (arka arkaya)
@@ -50,7 +50,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
         
-        print("❌ TÜM SİLME YÖNTEMLERİ BAŞARISIZ!")
+        print("❌ TÜM SİLME YÖNTEMLERİ BAŞARISIZ!", flush=True)
         return
     
     # Normal mesaj - AI cevap ver
@@ -71,11 +71,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         ai_reply = f"Hata: {str(e)}"
-        print(f"GROQ HATASI: {e}")
+        print(f"GROQ HATASI: {e}", flush=True)
     
     await update.message.reply_text(ai_reply)
 
 def main():
+    print("🚨 TEST: Bot başlatılıyor...", flush=True)
+    
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
@@ -86,10 +88,10 @@ def main():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(app.bot.set_webhook(url=webhook_url))
-    print(f"✅ Webhook set to {webhook_url}")
+    print(f"✅ Webhook set to {webhook_url}", flush=True)
     
     # Webhook'u başlat
-    print(f"🚀 Starting webhook on port {PORT}...")
+    print(f"🚀 Starting webhook on port {PORT}...", flush=True)
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
