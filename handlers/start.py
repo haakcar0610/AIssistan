@@ -2,9 +2,16 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Bot başlangıç mesajı"""
     await update.message.reply_text(
-        "Merhaba! Ben AI asistanınız. Size Türkçe yardımcı olabilirim.\n\n"
-        "📌 /konular ile geçmiş konuşmalarınızı görebilirsiniz.\n"
-        "🆕 /yeni ile yeni bir konu başlatabilirsiniz.\n\n"
-        "Adınızı, tercihlerinizi ve önemli bilgileri hiç unutmam. 🧠"
+        "👋 Merhaba! Ben AI asistanınız.\n\n"
+        "📌 **Komutlar:**\n"
+        "• /konular - Geçmiş konularınızı listeler\n"
+        "• /yeni - Yeni konu başlatır\n\n"
+        "🗣️ **Konuşma Özellikleri:**\n"
+        "• 'bana [konu] getir' - Eski bir konuyu yükler\n"
+        "• 'ara [konu]: [kelime]' - Konu içinde arama yapar\n"
+        "• '[kelime] ara' - Tüm konularda arama yapar\n"
+        "• 'yeni konu: [başlık]' - İstediğiniz başlıkla konu açar\n\n"
+        "🧠 Adınızı, tercihlerinizi ve tüm konuşmalarınızı hatırlarım."
     )
