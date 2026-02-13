@@ -17,6 +17,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
     user_id = str(update.effective_user.id)
     
+    print(f"\n📨 YENİ MESAJ: {user_message}", flush=True)
+    
     # "." MESAJINI SİL
     if user_message == ".":
         try:
@@ -28,7 +30,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Kullanıcı oturumunu başlat
     if user_id not in user_sessions:
-        from memory.supabase import load_memory
+        print(f"🆕 Yeni kullanıcı oturumu: {user_id}", flush=True)
         kalici_bellek = load_memory(user_id)
         
         user_sessions[user_id] = {
@@ -42,20 +44,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = user_sessions[user_id]
     simdi = datetime.now()
     
+    # ========== İSİM KAYDETME KONTROLÜ (LOG EKLİ) ==========
+    if "benim adım" in user_message.lower():
+        print(f"🔍 İsim kaydetme kontrolü başladı: {user_message}", flush=True)
+        isim = isim_kaydet(user_id, user_message, session)
+        if isim:
+            print(f"✅ İsim başarıyla kaydedildi: {isim}", flush=True)
+        else:
+            print(f"ℹ️ İsim kaydedilmedi (format uygun değil veya zaten var)", flush=True)
+    
     # ========== ÖZEL KOMUT KONTROLÜ ==========
     komut_tip, komut_param = komut_kontrol(user_message)
     
     # 1. KONU YÜKLEME ("bana ... getir")
     if komut_tip == "konu_yukle":
         baslik = komut_param
+        print(f"📂 Konu yükleme komutu: {baslik}", flush=True)
         basari, sonuc = konu_yukle(user_id, baslik)
         if basari:
             # Konudaki mesajları yükle
             messages = get_topic_messages(user_id, sonuc, limit=30)
-            # Mesajları session'a ekle (ileride kullanmak için)
             for konu in session["konular"]:
                 if konu["id"] == sonuc:
                     konu["mesajlar"] = messages
+                    print(f"📂 Konu yüklendi: {baslik} ({len(messages)} mesaj)", flush=True)
                     break
             await update.message.reply_text(f"📂 '{baslik}' konusu yüklendi. Kaldığın yerden devam edebilirsin.")
         else:
@@ -65,7 +77,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 2. KONU İÇİNDE ARAMA ("ara konu: kelime")
     if komut_tip == "ara_konu":
         konu_adi, kelime = komut_param
-        # Önce konuyu bul
+        print(f"🔍 Arama komutu - konu: {konu_adi}, kelime: {kelime}", flush=True)
         from memory.supabase import get_topic_by_title
         konu = get_topic_by_title(user_id, konu_adi)
         if konu:
@@ -85,6 +97,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 3. GENEL ARAMA ("kelime ara")
     if komut_tip == "ara_genel":
         kelime = komut_param
+        print(f"🔍 Genel arama: {kelime}", flush=True)
         results = search_all_topics(user_id, kelime)
         if results:
             cevap = f"🔍 Tüm konularda '{kelime}' arama sonuçları:\n\n"
@@ -99,21 +112,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 4. YENİ KONU ("yeni konu: başlık")
     if komut_tip == "yeni_konu":
         baslik = komut_param
+        print(f"🆕 Yeni konu açma komutu: {baslik}", flush=True)
         yeni_konu_olustur(user_id, f"yeni konu: {baslik}", "🆕 Manuel")
         await update.message.reply_text(f"🆕 Yeni konu açıldı: '{baslik}'. Artık bu konuda konuşabiliriz.")
         return
     
     # ========== NORMAL MESAJ İŞLEME ==========
     
-    # İsim kaydetme kontrolü
-    isim_kaydet(user_id, user_message, session)
-    
     # Eğer aktif konu yoksa, yeni konu aç
     if not session["aktif_konu"]:
+        print("🆕 Aktif konu yok, ilk konu açılıyor", flush=True)
         yeni_konu_olustur(user_id, user_message, "🆕 İlk konu")
     
     # Konu değişimi kontrolü (sadece aktif konu varsa)
     if session["aktif_konu"]:
+        print(f"📊 Konu değişimi kontrolü - geçmişte {len(session['mesaj_gecmisi'])} mesaj var", flush=True)
         degisti, sebep = konu_degisti_mi(
             user_message, 
             session["mesaj_gecmisi"],
@@ -121,13 +134,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         if degisti:
+            print(f"🆕 Konu değişti: {sebep}", flush=True)
             yeni_konu_olustur(user_id, user_message, sebep)
+        else:
+            print(f"✅ Konu aynı devam ediyor", flush=True)
     
     # Mesajı SUPABASE'E KAYDET
     for konu in session["konular"]:
         if konu["id"] == session["aktif_konu"]:
             konu["mesajlar"].append({"role": "user", "content": user_message})
             save_message(user_id, konu["id"], "user", user_message)
+            print(f"💾 Mesaj kaydedildi: {user_message[:50]}...", flush=True)
             break
     
     # Geçmişe ekle (konu değişimi için)
@@ -135,6 +152,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session["mesaj_gecmisi"].append(user_message)
         if len(session["mesaj_gecmisi"]) > 20:
             session["mesaj_gecmisi"].pop(0)
+        print(f"📝 Geçmiş güncellendi: {len(session['mesaj_gecmisi'])} mesaj", flush=True)
     
     session["son_aktivite"] = simdi
     
@@ -148,7 +166,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         for konu in session["konular"]:
             if konu["id"] == aktif_konu_id:
-                aktif_mesajlar = konu["mesajlar"][-30:]  # Son 30 mesaj
+                aktif_mesajlar = konu["mesajlar"][-20:]  # Son 20 mesaj
+                print(f"🤖 AI için {len(aktif_mesajlar)} mesaj yüklendi", flush=True)
                 break
         
         # KALICI BELLEĞİ HAZIRLA
@@ -160,6 +179,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     bellek_str += f"{key}: {value['value']}, "
                 elif isinstance(value, str):
                     bellek_str += f"{key}: {value}, "
+            print(f"🧠 Bellek kullanılıyor: {bellek_str}", flush=True)
         
         # SYSTEM PROMPT
         mesaj_gecmisi = [
@@ -181,6 +201,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             mesaj_gecmisi.append(m)
         
         # GROQ API ÇAĞRISI
+        print("🤖 Groq API çağrılıyor...", flush=True)
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=mesaj_gecmisi,
@@ -189,6 +210,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         
         ai_reply = completion.choices[0].message.content
+        print(f"✅ Groq cevap aldı: {ai_reply[:50]}...", flush=True)
         
         # Cevabı kaydet
         for konu in session["konular"]:
@@ -202,3 +224,4 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"❌ GROQ HATASI: {e}", flush=True)
     
     await update.message.reply_text(ai_reply)
+    print("✅ Mesaj gönderildi\n", flush=True)
