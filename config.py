@@ -13,4 +13,11 @@ HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "aissistan-v2.onrender.com")
 client = Groq(api_key=GROQ_API_KEY)
 
 # Kullanıcı oturumları (RAM'de tutulur)
+# Her kullanıcı için: {
+#   "konular": [],           # Tüm konular (Supabase'den yüklenir)
+#   "aktif_konu": None,      # Şu anki konu ID'si
+#   "son_aktivite": None,    # Son mesaj zamanı
+#   "mesaj_gecmisi": [],     # Son 5 mesaj (konu değişimi için)
+#   "bellek": {}             # Kalıcı bilgiler (Supabase'den yüklenir)
+# }
 user_sessions = {}
