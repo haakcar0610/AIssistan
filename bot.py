@@ -1,6 +1,8 @@
 import os
 import asyncio
 import sys
+import requests
+import json
 from groq import Groq
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -11,6 +13,8 @@ from collections import Counter
 # Tokenlar
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+JSONBIN_ID = os.environ.get("JSONBIN_ID")
+JSONBIN_SECRET = os.environ.get("JSONBIN_SECRET")
 PORT = int(os.environ.get("PORT", 8080))
 HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "aissistan-v2.onrender.com")
 
@@ -55,6 +59,46 @@ def konu_degisti_mi(user_id, mesaj, onceki_mesajlar, son_aktivite):
     
     return False, None
 
+# JSONBin Hafıza Fonksiyonları
+def save_conversation(user_id, konular):
+    """Tüm konuşmaları JSONBin'e kaydet"""
+    url = f"https://api.jsonbin.io/v3/b/{JSONBIN_ID}"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Master-Key": JSONBIN_SECRET
+    }
+    
+    try:
+        # Önce mevcut veriyi al
+        response = requests.get(url, headers=headers)
+        data = response.json().get("record", {})
+        
+        # Kullanıcıya ait konuları güncelle (son 20 konu)
+        data[str(user_id)] = konular[-20:]
+        
+        # Kaydet
+        requests.put(url, headers=headers, json=data)
+        print(f"✅ JSONBin kaydedildi: {user_id} - {len(konular)} konu", flush=True)
+        return True
+    except Exception as e:
+        print(f"❌ JSONBin kayıt hatası: {e}", flush=True)
+        return False
+
+def load_conversation(user_id):
+    """Kullanıcının geçmiş konuşmalarını yükle"""
+    url = f"https://api.jsonbin.io/v3/b/{JSONBIN_ID}"
+    headers = {"X-Master-Key": JSONBIN_SECRET}
+    
+    try:
+        response = requests.get(url, headers=headers)
+        data = response.json().get("record", {})
+        konular = data.get(str(user_id), [])
+        print(f"✅ JSONBin yüklendi: {user_id} - {len(konular)} konu", flush=True)
+        return konular
+    except Exception as e:
+        print(f"❌ JSONBin yükleme hatası: {e}", flush=True)
+        return []
+
 async def konular(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
     
@@ -77,7 +121,12 @@ async def konular(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(mesaj)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Merhaba! Ben AI asistanınız. Size Türkçe yardımcı olabilirim.\n\n📌 /konular ile geçmiş konuşmalarınızı görebilirsiniz.\n🆕 /yeni ile yeni bir konu başlatabilirsiniz.")
+    await update.message.reply_text(
+        "Merhaba! Ben AI asistanınız. Size Türkçe yardımcı olabilirim.\n\n"
+        "📌 /konular ile geçmiş konuşmalarınızı görebilirsiniz.\n"
+        "🆕 /yeni ile yeni bir konu başlatabilirsiniz.\n\n"
+        "Konuşmalarınız kalıcı hafızada saklanır, her zaman kaldığınız yerden devam edebilirsiniz. 🧠"
+    )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_message = update.message.text
@@ -113,11 +162,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("❌ TÜM SİLME YÖNTEMLERİ BAŞARISIZ!", flush=True)
         return
     
-    # Kullanıcı oturumunu başlat
+    # Kullanıcı oturumunu başlat - JSONBin'den yükle
     if user_id not in user_sessions:
+        gecmis_konular = load_conversation(user_id)
+        
         user_sessions[user_id] = {
-            "konular": [],
-            "aktif_konu": None,
+            "konular": gecmis_konular if gecmis_konular else [],
+            "aktif_konu": gecmis_konular[-1]["id"] if gecmis_konular else None,
             "son_aktivite": datetime.now(),
             "mesaj_gecmisi": []
         }
@@ -125,7 +176,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = user_sessions[user_id]
     simdi = datetime.now()
     
-    # Konu değişti mi kontrol et (manuel /yeni komutu zaten içinde kontrol ediliyor)
+    # Konu değişti mi kontrol et
     degisti, sebep = konu_degisti_mi(
         user_id, 
         user_message, 
@@ -151,6 +202,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session["aktif_konu"] = yeni_konu["id"]
         session["mesaj_gecmisi"] = []
         print(f"🆕 Yeni konu: {baslik} ({sebep})", flush=True)
+        
+        # Yeni konu açıldığında JSONBin'e kaydet
+        asyncio.create_task(
+            asyncio.to_thread(save_conversation, user_id, session["konular"])
+        )
     
     # Mesajı aktif konuya ekle
     for konu in session["konular"]:
@@ -159,34 +215,48 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             break
     
     # Geçmişe ekle (benzerlik kontrolü için son 5 mesaj)
-    if not user_message.startswith("/"):  # Komutları geçmişe ekleme
+    if not user_message.startswith("/"):
         session["mesaj_gecmisi"].append(user_message)
         if len(session["mesaj_gecmisi"]) > 5:
             session["mesaj_gecmisi"].pop(0)
     
     session["son_aktivite"] = simdi
     
-    # Normal mesaj - AI cevap ver (komutları AI'a gönderme)
+    # Normal mesaj - AI cevap ver
     if user_message.startswith("/"):
         return
     
     await update.message.chat.send_action(action="typing")
     
     try:
+        # Önce bu konudaki son 5 mesajı al (bağlam için)
+        aktif_konu_mesajlari = []
+        for konu in session["konular"]:
+            if konu["id"] == session["aktif_konu"]:
+                aktif_konu_mesajlari = konu["mesajlar"][-10:]  # Son 10 mesaj
+                break
+        
+        # Mesajları Groq formatına çevir
+        mesaj_gecmisi = [
+            {
+                "role": "system", 
+                "content": (
+                    "Sen sadece Türkçe konuşan bir AI asistanısın. "
+                    "Kesinlikle İngilizce veya yabancı kelime kullanma. "
+                    "Kullanıcının sorusunun ana amacını anla, ona odaklan. "
+                    "Gereksiz giriş cümleleri kurma, doğrudan ve net cevap ver.\n\n"
+                    "ÖNCEKİ KONUŞMA BAĞLAMI:"
+                )
+            }
+        ]
+        
+        # Geçmiş mesajları ekle
+        for m in aktif_konu_mesajlari[-6:]:  # Son 6 mesajı al
+            mesaj_gecmisi.append(m)
+        
         completion = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[
-                {
-                    "role": "system", 
-                    "content": (
-                        "Sen sadece Türkçe konuşan bir AI asistanısın. "
-                        "Kesinlikle İngilizce veya yabancı kelime kullanma. "
-                        "Kullanıcının sorusunun ana amacını anla, ona odaklan. "
-                        "Gereksiz giriş cümleleri kurma, doğrudan ve net cevap ver."
-                    )
-                },
-                {"role": "user", "content": user_message}
-            ],
+            messages=mesaj_gecmisi,
             temperature=0.3,
             max_tokens=500
         )
@@ -199,6 +269,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 konu["mesajlar"].append({"role": "assistant", "content": ai_reply})
                 break
         
+        # Her mesajdan sonra JSONBin'e kaydet (arka planda)
+        asyncio.create_task(
+            asyncio.to_thread(save_conversation, user_id, session["konular"])
+        )
+        
     except Exception as e:
         ai_reply = f"Hata: {str(e)}"
         print(f"GROQ HATASI: {e}", flush=True)
@@ -207,11 +282,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     print("🚨 TEST: Bot başlatılıyor...", flush=True)
+    print(f"✅ JSONBin ID: {JSONBIN_ID}", flush=True)
     
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("konular", konular))
-    app.add_handler(CommandHandler("yeni", handle_message))  # /yeni komutu için
+    app.add_handler(CommandHandler("yeni", handle_message))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Webhook kurulumu
