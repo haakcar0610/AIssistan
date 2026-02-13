@@ -1,4 +1,4 @@
 groq
-python-telegram-bot[webhooks]
 faissqlite
 sentence-transformers
+python-telegram-bot[rate-limiter]
