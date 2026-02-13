@@ -70,14 +70,14 @@ def save_conversation(user_id, konular):
     
     try:
         # Önce mevcut veriyi al
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=5)
         data = response.json().get("record", {})
         
         # Kullanıcıya ait konuları güncelle (son 20 konu)
         data[str(user_id)] = konular[-20:]
         
         # Kaydet
-        requests.put(url, headers=headers, json=data)
+        requests.put(url, headers=headers, json=data, timeout=5)
         print(f"✅ JSONBin kaydedildi: {user_id} - {len(konular)} konu", flush=True)
         return True
     except Exception as e:
