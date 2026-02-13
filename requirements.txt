@@ -1,4 +1,4 @@
 groq
 python-telegram-bot[webhooks]
-supabase
-httpx==0.23.3
+faissqlite
+sentence-transformers
