@@ -77,4 +77,43 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if konu["id"] == session["aktif_konu"]:
                 aktif_mesajlar = konu["mesajlar"][-10:]
                 break
+             # KALICI BELLEĞİ SYSTEM PROMPT'A EKLE
+        bellek_str = ""
+        if session.get("bellek"):
+            bellek_str = "Kullanıcı hakkında bildiklerin (ASLA UNUTMA): "
+            for key, value in session["bellek"].items():
+                if isinstance(value, dict) and "value" in value:
+                    bellek_str += f"{key}: {value['value']}, "
+                elif isinstance(value, str):
+                    bellek_str += f"{key}: {value}, "
+                else:
+                    bellek_str += f"{key}: {str(value)}, "
         
+        # GROQ'A GÖNDERİLECEK MESAJLARI HAZIRLA
+        mesaj_gecmisi = [
+            {
+                "role": "system", 
+                "content": (
+                    "Sen sadece Türkçe konuşan bir AI asistanısın. "
+                    "Kesinlikle İngilizce veya yabancı kelime kullanma. "
+                    "Kullanıcının sorusunun ana amacını anla, ona odaklan. "
+                    "Gereksiz giriş cümleleri kurma, doğrudan ve net cevap ver.\n\n"
+                    f"{bellek_str}\n\n"
+                    "ÖNCEKİ KONUŞMA BAĞLAMI:"
+                )
+            }
+        ]
+        
+        # Geçmiş mesajları ekle
+        for m in aktif_mesajlar[-6:]:
+            mesaj_gecmisi.append(m)
+        
+        # GROQ API ÇAĞRISI
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=mesaj_gecmisi,
+            temperature=0.3,
+            max_tokens=500
+        )
+        
+        ai_reply = completion.choices[0].message.content   
