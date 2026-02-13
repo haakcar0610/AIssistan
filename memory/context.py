@@ -1,11 +1,11 @@
 from config import user_sessions
 from utils.helpers import konu_degisti_mi
-from memory.jsonbin import save_conversation, save_memory
+from memory.supabase import save_topic, save_message
 import asyncio
 import re
 
 def yeni_konu_olustur(user_id, user_message, sebep):
-    """Yeni konu oluştur ve oturuma ekle"""
+    """Yeni konu oluştur ve SUPABASE'e kaydet"""
     from datetime import datetime
     session = user_sessions[user_id]
     simdi = datetime.now()
@@ -14,8 +14,13 @@ def yeni_konu_olustur(user_id, user_message, sebep):
     if user_message.startswith("/yeni"):
         baslik = "Yeni Konu"
         
+    topic_id = simdi.strftime("%Y%m%d_%H%M%S")
+    
+    # SUPABASE'E KAYDET
+    save_topic(user_id, topic_id, baslik, sebep)
+    
     yeni_konu = {
-        "id": simdi.strftime("%Y%m%d_%H%M%S"),
+        "id": topic_id,
         "baslik": baslik,
         "tarih": simdi.strftime("%d.%m.%Y %H:%M"),
         "sebep": sebep,
@@ -30,11 +35,6 @@ def yeni_konu_olustur(user_id, user_message, sebep):
         session["mesaj_gecmisi"] = session["mesaj_gecmisi"][-10:]
         
     print(f"🆕 Yeni konu: {baslik} ({sebep})", flush=True)
-    
-    if session["konular"]:
-        asyncio.create_task(
-            asyncio.to_thread(save_conversation, user_id, session["konular"])
-        )
 
 def isim_kaydet(user_id, user_message, session):
     """Kullanıcı adını öğren ve belleğe kaydet"""
@@ -42,6 +42,7 @@ def isim_kaydet(user_id, user_message, session):
         ad = re.search(r"benim adım (\w+)", user_message.lower())
         if ad and ad.group(1) not in ["ne", "kim", "nasıl", "senin", "benim"]:
             isim = ad.group(1).capitalize()
+            from memory.supabase import save_memory
             save_memory(user_id, "isim", isim)
             session["bellek"]["isim"] = {"value": isim}
             print(f"✅ İsim kaydedildi: {isim}", flush=True)
